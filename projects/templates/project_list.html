@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Lista projektów i użytkowników</title>
+    <style>
+        button {
+            padding: 5px 10px;
+            margin-right: 10px;
+            cursor: pointer;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            border-radius: 5px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        #tag-filter {
+            display: none;
+            margin-top: 10px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: row;
+        }
+
+        .projects, .members {
+            flex: 1;
+            margin-right: 20px;
+        }
+
+        .project-item, .member-item {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+            list-style: none;
+        }
+
+        .projects-title, .members-title {
+            margin-bottom: 10px;
+        }
+    </style>
+    <script>
+        function toggleProjectDetails(projectId) {
+            const projectDetailsElement = document.getElementById(`project-details-${projectId}`);
+
+            if (projectDetailsElement.style.display === 'block') {
+                projectDetailsElement.style.display = 'none';
+            } else {
+                fetch(`/listings/projects/${projectId}/`)
+                    .then(response => response.json())
+                    .then(data => {
+                        projectDetailsElement.innerHTML = `<p>Nazwa: ${data.name}</p>
+                                                            <p>Opis: ${data.description}</p>
+                                                            <p>Data utworzenia: ${data.created_date}</p>
+                                                            <p>Data modyfikacji: ${data.modified_date}</p>`;
+                        projectDetailsElement.style.display = 'block';
+                    })
+                    .catch(error => {
+                        console.error('Błąd pobierania danych o projekcie', error);
+                    });
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const sortSelect = document.querySelector('select[name="sort_by"]');
+            sortSelect.addEventListener('change', function() {
+                this.form.submit();
+            });
+
+            const toggleTagFilterButton = document.querySelector('#toggle-tag-filter');
+            toggleTagFilterButton.addEventListener('click', function() {
+                const tagFilterElement = document.querySelector('#tag-filter');
+                if (tagFilterElement.style.display === 'none' || tagFilterElement.style.display === '') {
+                    tagFilterElement.style.display = 'block';
+                } else {
+                    tagFilterElement.style.display = 'none';
+                }
+            });
+
+            fetch('/listings/users/')
+                .then(response => response.json())
+                .then(data => {
+                    const usersList = document.getElementById('users-list');
+                    data.users_list.forEach(user => {
+                        const userItem = document.createElement('div');
+                        userItem.className = 'member-item';
+                        userItem.innerHTML = `<input type="checkbox" name="user-ids" value="${user.id}"> ID: ${user.id} - ${user.name} - ${user.username}`;
+                        usersList.appendChild(userItem);
+                    });
+                })
+                .catch(error => {
+                    console.error('Błąd pobierania danych użytkowników', error);
+                });
+        });
+
+        function assignUsersToProjects() {
+            const userIds = Array.from(document.querySelectorAll('input[name="user-ids"]:checked')).map(el => el.value);
+            const projectIds = Array.from(document.querySelectorAll('input[name="project-ids"]:checked')).map(el => el.value);
+
+            fetch('/listings/assign-user-to-projects/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ user_ids: userIds, project_ids: projectIds })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                })
+                .catch(error => {
+                    console.error('Błąd przypisywania użytkowników do projektów', error);
+                });
+        }
+
+
+
+    </script>
+</head>
+<body>
+    <h1>Lista projektów i użytkowników</h1>
+    <form method="get" action="{% url 'project_list_view' %}">
+        <button type="submit">Resetuj</button>
+    </form>
+    <div class="container">
+        <div class="projects">
+            <h2 class="projects-title">Lista Projektów</h2>
+            <form id="filter-form" method="get" action="{% url 'project_list_view' %}">
+                <label for="sort_by">Sortuj według:</label>
+                <select name="sort_by" id="sort_by">
+                    {% for option_value, option_label in sort_options %}
+                        <option value="{{ option_value }}" {% if selected_sort == option_value %}selected{% endif %}>{{ option_label }}</option>
+                    {% endfor %}
+                </select>
+                <button type="button" id="toggle-tag-filter">Filtruj według tagu</button>
+                <button type="submit">Filtruj</button>
+                <div id="tag-filter">
+                    <fieldset>
+                        <legend>Wybierz tagi:</legend>
+                        {% for tag in unique_tags %}
+                            <label>
+                                <input type="checkbox" name="filter_by_tag" value="{{ tag }}" {% if tag in selected_filters %}checked{% endif %}>
+                                {{ tag }}
+                            </label><br>
+                        {% endfor %}
+                    </fieldset>
+                </div>
+            </form>
+            <ul style="padding: 0;">
+                {% for project in projects_list %}
+                    <li class="project-item">
+                        <input type="checkbox" name="project-ids" value="{{ project.id }}">
+                        {{ project.name }} - id: {{ project.id }}
+                        <button type="button" onclick="toggleProjectDetails('{{ project.id }}')">Zobacz więcej</button>
+                        <div id="project-details-{{ project.id }}" style="display: none;"></div>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="members">
+            <div>
+                <button type="button" onclick="assignUsersToProjects()">Przypisz użytkowników do wybranych projektów</button>
+            </div>
+            <h2 class="members-title">Lista użytkowników</h2>
+            <div id="users-list"></div>
+        </div>
+    </div>
+</body>
+</html>
